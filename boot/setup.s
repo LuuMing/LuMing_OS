@@ -31,10 +31,12 @@ entry start
 start:
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !print Now in Setup
+	mov ax,#SETUPSEG
+	mov es,ax
 	mov ah,#0x03
 	xor bh,bh
 	int 0x10
-	mov cx,#23
+	mov cx,#25
 	mov bx,#0x0007
 	mov bp,#msg
 	mov ax,#0x1301
@@ -235,7 +237,7 @@ gdt_48:
 msg:
 	.byte 13,10
 	.ascii "Now we are in SETUP"
-	.byte 13,10
+	.byte 13,10,13,10
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 .text
