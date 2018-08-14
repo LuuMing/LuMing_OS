@@ -116,7 +116,11 @@ void schedule(void)
 				}
 			if (((*p)->signal & ~(_BLOCKABLE & (*p)->blocked)) &&
 			(*p)->state==TASK_INTERRUPTIBLE)
+			{
+				if( (*p)-> state != TASK_RUNNING )	
+					fprintk(3, "%ld\t%c\t%ld\n", (*p)->pid, 'J', jiffies);	
 				(*p)->state=TASK_RUNNING;
+			}
 		}
 
 /* this is the scheduler proper: */
@@ -138,11 +142,21 @@ void schedule(void)
 				(*p)->counter = ((*p)->counter >> 1) +
 						(*p)->priority;
 	}
+	if( task[next] -> pid != current->pid )
+	{
+		if( current -> state == TASK_RUNNING)
+		{
+			fprintk(3, "%ld\t%c\t%ld\n", current->pid, 'J', jiffies);
+		}
+		fprintk(3, "%ld\t%c\t%ld\n", task[next]->pid, 'R', jiffies);
+	}
 	switch_to(next);
 }
 
 int sys_pause(void)
 {
+	if(current->state != TASK_INTERRUPTIBLE)
+		fprintk(3, "%ld\t%c\t%ld\n", current->pid, 'W', jiffies);	
 	current->state = TASK_INTERRUPTIBLE;
 	schedule();
 	return 0;
@@ -159,10 +173,15 @@ void sleep_on(struct task_struct **p)
 	tmp = *p;
 	*p = current;
 	current->state = TASK_UNINTERRUPTIBLE;
-	fprintk(3,"%ld\t%c\t%ld\n",current->pid,'W',jiffies);
+	if( current -> state != TASK_UNINTERRUPTIBLE)
+		fprintk(3,"%ld\t%c\t%ld\n",current->pid,'W',jiffies);
 	schedule();
 	if (tmp)
+	{
+		if( tmp -> state != TASK_RUNNING)
+			fprintk(3, "%ld\t%c\t%ld\n", tmp->pid, 'J', jiffies);
 		tmp->state=0;
+	}
 }
 
 void interruptible_sleep_on(struct task_struct **p)
@@ -176,23 +195,29 @@ void interruptible_sleep_on(struct task_struct **p)
 	tmp=*p;
 	*p=current;
 repeat:	current->state = TASK_INTERRUPTIBLE;
+	if(current -> state != TASK_INTERRUPTIBLE)
 	fprintk(3,"%ld\t%c\t%ld\n",current->pid,'W',jiffies);
 	schedule();
 	if (*p && *p != current) {
+		if((*p)->state != 0)
+			fprintk(3, "%ld\t%c\t%ld\n", (**p).pid, 'J', jiffies);
 		(**p).state=0;
 		goto repeat;
 	}
 	*p=NULL;
 	if (tmp)
 	{
+		if( tmp->state != 0)
+			fprintk(3, "%ld\t%c\t%ld\n", tmp->pid, 'J', jiffies);
 		tmp->state=0;
-		fprintk(3,"%ld\t%c\t%ld\n",tmp->pid,'J',jiffies);	
 	}
 }
 
 void wake_up(struct task_struct **p)
 {
 	if (p && *p) {
+		if((**p).state != 0)	
+			fprintk(3,"%ld\t%c\t%ld\n",(**p).pid,'J',jiffies);
 		(**p).state=0;
 		*p=NULL;
 	}
