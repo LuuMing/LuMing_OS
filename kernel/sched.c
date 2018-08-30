@@ -22,7 +22,7 @@
 
 #define _S(nr) (1<<((nr)-1))
 #define _BLOCKABLE (~(_S(SIGKILL) | _S(SIGSTOP)))
-
+extern void switch_to(struct task_struct * pnext,int next);
 void show_task(int nr,struct task_struct * p)
 {
 	int i,j = 4096-sizeof(struct task_struct);
@@ -105,7 +105,7 @@ void schedule(void)
 {
 	int i,next,c;
 	struct task_struct ** p;
-
+	struct task_struct ** pnext = NULL;
 /* check alarm, wake up any interruptible tasks that have got a signal */
 
 	for(p = &LAST_TASK ; p > &FIRST_TASK ; --p)
@@ -128,13 +128,14 @@ void schedule(void)
 	while (1) {
 		c = -1;
 		next = 0;
+		pnext = task[next];
 		i = NR_TASKS;
 		p = &task[NR_TASKS];
 		while (--i) {
 			if (!*--p)
 				continue;
 			if ((*p)->state == TASK_RUNNING && (*p)->counter > c)
-				c = (*p)->counter, next = i;
+				c = (*p)->counter, next = i, pnext = *p;
 		}
 		if (c) break;
 		for(p = &LAST_TASK ; p > &FIRST_TASK ; --p)
@@ -150,7 +151,7 @@ void schedule(void)
 		}
 		fprintk(3, "%ld\t%c\t%ld\n", task[next]->pid, 'R', jiffies);
 	}
-	switch_to(next);
+	switch_to(pnext, LDT(next));
 }
 
 int sys_pause(void)

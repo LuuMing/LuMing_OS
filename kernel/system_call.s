@@ -283,3 +283,76 @@ parallel_interrupt:
 	outb %al,$0x20
 	popl %eax
 	iret
+ 
+.align 2 
+switch_to: 
+    pushl %ebp 
+    movl %esp,%ebp        #上面两条用来调整C函数栈态 
+    pushfl            #将当前的内核eflags入栈！！！！ 
+    pushl %ecx 
+    pushl %ebx 
+    pushl %eax 
+    movl 8(%ebp),%ebx    #此时ebx中保存的是第一个参数switch_to(pnext,LDT(next)) 
+    cmpl %ebx,current    #此处判断传进来的PCB是否为当前运行的PCB 
+    je 1f            #如果相等，则直接退出 
+    #切换PCB 
+    movl %ebx,%eax        #ebx中保存的是传递进来的要切换的pcb 
+    xchgl %eax,current    #交换eax和current，交换完毕后eax中保存的是被切出去的PCB 
+    #TSS中内核栈指针重写 
+    movl tss,%ecx        #将全局的tss指针保存在ecx中 
+    addl $4096,%ebx        #取得tss保存的内核栈指针保存到ebx中 
+    movl %ebx,ESP0(%ecx)    #将内核栈指针保存到全局的tss的内核栈指针处esp0=4 
+    #切换内核栈 
+    movl %esp,KERNEL_STACK(%eax)    #将切出去的PCB中的内核栈指针存回去 
+    movl $1f,KERNEL_EIP(%eax)    #将1处地址保存在切出去的PCB的EIP中！！！！ 
+    movl 8(%ebp),%ebx    #重取ebx值， 
+    movl KERNEL_STACK(%ebx),%esp    #将切进来的内核栈指针保存到寄存器中 
+#下面两句是后来添加的，实验指导上并没有这样做。
+    pushl KERNEL_EIP(%ebx)        #将保存在切换的PCB中的EIP放入栈中！！！！ 
+    jmp  switch_csip        #跳到switch_csip处执行！！！！ 
+#    原切换LDT代码换到下面
+#    原切换LDT的代码在下面 
+1:    popl %eax 
+    popl %ebx 
+    popl %ecx 
+    popfl            #将切换时保存的eflags出栈！！！！ 
+    popl %ebp 
+    ret            #该语句用来出栈ip 
+ 
+switch_csip:            #用来进行内核段切换和cs:ip跳转 
+    #切换LDT 
+    movl 12(%ebp),%ecx    #取出第二个参数，_LDT(next) 
+    lldt %cx        #切换LDT 
+    #切换cs后要重新切换fs,所以要将fs切换到用户态内存 
+    movl $0x17,%ecx        #此时ECX中存放的是LDT 
+    mov  %cx,%fs 
+    cmpl %eax,last_task_used_math 
+    jne  1f 
+    clts         
+1: 
+    ret            #此处用来弹出pushl next->eip！！！！！！！！ 
+ 
+ 
+#第一次被调度时运行的切换代码 
+first_switch_from: 
+    popl %eax 
+    popl %ebx 
+    popl %ecx 
+    popfl            #将切换时保存的eflags出栈！！！！ 
+    popl %ebp 
+    ret            #该语句用来出栈ip 
+ 
+#此处是从内核站中返回时使用的代码，用来做中断返回 
+first_return_from_kernel: 
+    #popl %eax 
+    #popl %ebx 
+    #popl %ecx 
+    popl %edx 
+    popl %edi 
+    popl %esi 
+    popl %gs 
+    popl %fs 
+    popl %es 
+    popl %ds 
+    iret
+
